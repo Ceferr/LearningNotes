@@ -140,3 +140,80 @@ docker run -p 6379:6379 --name myredis -v /usr/local/redis/redis.conf:/etc/redis
 - No-appendfsync-on-rewrite 重写时是否可以运用Appendfsync，默认no
 - Auto-aof-rewrite-min-size 100  (上一次aof文件的一倍)
 - Auto-aof-rewrite-percentage 64mb
+
+# 四.Redis事务
+
+## 1.事务常用命令
+
+- DISCARD 取消事务
+- EXEC 执行所有事务块内的命令
+- MULTI 标记一个事务块的开始
+- UNWATCH 取消WATCH命令对所有key的监视
+- WATCH Key [key...] 监视一个(或多个)，如果在事务之前这个key被其它命令改动，那么事务被打断。
+
+## 2.事务的5种场景
+
+1. **正常执行** MULTI --> EXEC
+2. **放弃事务** MULTI --> DISCARD
+3. **全体连坐** 语法有误，出现error，那全体不执行
+4. **冤头债主** 语法无误，逻辑错误的一条不执行
+5. **watch监控** 监视一个(或多个)，如果在事务之前这个key被其它命令改动，那么事务被打断。
+
+## 3.事务的3阶段
+
+1. 开启：以MULTI开启一个事务；
+2. 入队：将多个命令入队到事务中，命令不会立即执行；
+3. 执行：由EXEC命令触发事务
+
+## 4.事务的3个特性
+
+1. 单独的隔离操作：事务中的所有命令都会序列化，按顺序地执行，事务执行的过程中不会被客户端发来的其它请求打断；
+2. 没有隔离级别的概念：队列中的命令不提交就不执行，也就不存在“事务内的查询要看到事务里的更新，在事务外查询不能看到”的问题；
+3. 不保证原子性：redis同一个事务中如果有一条命令执行失败，其后的命令仍然可以执行，不会发生回滚。
+
+# 五.Redis的主从复制
+
+## 1.是什么
+
+​	主机数据更新后根据配置和策略，自动同步到备机的master/slave机制，master以写为主，slave以读为主
+
+## 2.主要作用
+
+- 读写分离
+- 容灾恢复
+
+## 3.常用的3种操作
+
+​	slaveof ip port
+
+1. ​	一主二从
+
+   一台master两台slave
+
+2. 薪火相传
+
+   一台master挂一台slave，slave再挂slave，可以减轻master压力
+
+3. 反客为主
+
+   使一台slave成为master，SLAVEOF no one
+
+## 4.复制原理
+
+- Slave启动成功连接到master后会发一个sync命令
+
+  Master在接到命令后启动后台的存盘进程，同收集所有接收到用于修改数据集命令，在后台进程执行完毕之后，master将传送整个数据文件到slave，已完成一次完全同步
+
+- 全量复制：slave服务在接收到数据库文件数据后，将其存盘并加载到内存中。
+
+- 增量复制：Master继续将新的收集到的修改命令依次传给slave，完成同步。
+
+- 但只要是重新连接master，一次完全同步（全量复制）将被自动执行
+
+## 5.哨兵模式(sentinel)
+
+- 反客为主的自动版，能够后台监控主机是否故障，如果故障了，根据投票自动将从库转为主库
+- 创建sentinel.conf:
+- sentinel monitor 主机名(被监控的主机) +ip +port  n(谁的票数多n谁就是master)
+- 启动哨兵: Redis-sentinel ${path}/sentinel.conf
+
